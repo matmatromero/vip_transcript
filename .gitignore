@@ -19,6 +19,7 @@ docker-compose.yml
 
 /GCP_CONSOLE_DEPLOYMENT_GUIDE.md
 /GCP_ARCHITECTURE.md
+/PHASE1_DESIGN.md
 
 old_references/*
 
