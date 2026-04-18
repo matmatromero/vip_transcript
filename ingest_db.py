@@ -1,16 +1,17 @@
 import os
+import sys
 import json
 import psycopg2
 from psycopg2.extras import Json
 from pathlib import Path
 
-# Local Docker connection matching docker-compose.yml
+# Use environment variables set in Cloud Run, falling back to local Docker defaults
 DB_CONFIG = {
-    "dbname": "rag_db",
-    "user": "admin",
-    "password": "password",
-    "host": "localhost",
-    "port": "5432"
+    "dbname": os.environ.get("DB_NAME", "rag_db"),
+    "user": os.environ.get("DB_USER", "postgres"),
+    "password": os.environ.get("DB_PASS", "password"),
+    "host": os.environ.get("DB_HOST", "localhost"),
+    "port": os.environ.get("DB_PORT", "5432")
 }
 
 def setup_database(conn):
@@ -83,7 +84,8 @@ def main():
             print(f"\n✅ Total Chunks securely stored in postgres: {count}")
             
     except Exception as e:
-        print(f"Database ingestion error: {e}")
+        print(f"Database ingestion error: {e}", file=sys.stderr)
+        sys.exit(1)
     finally:
         if 'conn' in locals():
             conn.close()
