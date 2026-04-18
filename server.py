@@ -78,7 +78,117 @@ def eventarc_receiver():
     print("Success: Pipeline complete!")
     return jsonify({"status": "Success", "file": file_name}), 200
 
+
+@app.route("/search", methods=["POST"])
+def search():
+    """
+    RAG search endpoint. Accepts a natural language query, embeds it via Vertex AI,
+    and returns the most semantically similar transcript chunks from pgvector.
+    """
+    import psycopg2
+
+    body = request.get_json()
+    if not body or "query" not in body:
+        return jsonify({"error": "Missing 'query' field in JSON body"}), 400
+
+    query_text = body["query"]
+    limit = body.get("limit", 5)
+    theme_filter = body.get("theme", None)
+    speaker_filter = body.get("speaker", None)
+    transcript_filter = body.get("transcript", None)
+
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "tonal-transit-435411-i4")
+
+    try:
+        from chunker.embedders import VertexAIEmbedder
+        embedder = VertexAIEmbedder(model="text-embedding-004", project=project_id, location="us-central1")
+        query_embedding = embedder.embed([query_text])[0]
+    except Exception as e:
+        return jsonify({"error": "Embedding failed", "details": str(e)}), 500
+
+    vector_str = "[" + ",".join(str(v) for v in query_embedding) + "]"
+
+    db_config = {
+        "dbname": os.environ.get("DB_NAME", "rag_db"),
+        "user": os.environ.get("DB_USER", "postgres"),
+        "password": os.environ.get("DB_PASS", "password"),
+        "host": os.environ.get("DB_HOST", "localhost"),
+        "port": os.environ.get("DB_PORT", "5432"),
+    }
+
+    try:
+        conn = psycopg2.connect(**db_config)
+        cur = conn.cursor()
+
+        where_clauses = []
+        params = []
+
+        if theme_filter:
+            where_clauses.append("theme = %s")
+            params.append(theme_filter)
+        if speaker_filter:
+            where_clauses.append("speaker_array::text ILIKE %s")
+            params.append(f"%{speaker_filter}%")
+        if transcript_filter:
+            where_clauses.append("transcript_name = %s")
+            params.append(transcript_filter)
+
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+
+        sql = f"""
+            SELECT chunk_id, transcript_name, section, theme,
+                   speaker_array, chunk_text, token_count,
+                   embedding <=> %s::vector AS distance
+            FROM transcript_chunks
+            {where_sql}
+            ORDER BY distance
+            LIMIT %s;
+        """
+
+        params = [vector_str] + params + [limit]
+        # Reorder: vector_str needs to be first param, then WHERE params, then LIMIT
+        # Actually, let's rebuild to be safe with param ordering
+        all_params = []
+        all_params.append(vector_str)
+        if theme_filter:
+            all_params.append(theme_filter)
+        if speaker_filter:
+            all_params.append(f"%{speaker_filter}%")
+        if transcript_filter:
+            all_params.append(transcript_filter)
+        all_params.append(limit)
+
+        cur.execute(sql, all_params)
+        rows = cur.fetchall()
+
+        results = []
+        for row in rows:
+            results.append({
+                "chunk_id": row[0],
+                "transcript_name": row[1],
+                "section": row[2],
+                "theme": row[3],
+                "speakers": row[4],
+                "chunk_text": row[5],
+                "token_count": row[6],
+                "distance": round(float(row[7]), 4),
+            })
+
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "query": query_text,
+            "results_count": len(results),
+            "results": results,
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": "Search failed", "details": str(e)}), 500
+
+
 if __name__ == "__main__":
-    # Cloud Run sets the PORT env var defaulting to 8080
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
