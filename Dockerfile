@@ -27,7 +27,8 @@ COPY chunker /app/chunker
 COPY run_chunker.py /app/run_chunker.py
 COPY ingest_db.py /app/ingest_db.py
 COPY schema.sql /app/schema.sql
+COPY server.py /app/server.py
 
-# When deployed to Cloud Run or generic Docker, running ingest_db acts as an end-to-end execution wrapper
-# Typically, Cloud Run expects an exposed HTTP port, but for Eventarc Triggered Jobs, a command exit works perfectly.
-CMD ["python", "run_chunker.py", "--input", "raw_transcripts/", "--output", "output/chunks/"]
+# Cloud Run requires a web server listening on PORT (default 8080)
+# We use Gunicorn to run the Flask app bridging Eventarc to our python logic.
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 server:app
