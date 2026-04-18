@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS transcript_chunks (
     speaker_array JSONB,          -- Store multiple speakers dynamically
     chunk_text TEXT NOT NULL,
     token_count INT,
-    embedding vector(384)         -- Matches the dimension size of all-MiniLM-L6-v2
+    embedding vector(768)         -- Matches the dimension size of Vertex AI text-embeddings
 );
 
 -- Index for optimized vector search using Inner Product (good for normalized vectors / cosine sim)
