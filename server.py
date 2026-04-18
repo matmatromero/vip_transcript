@@ -79,23 +79,33 @@ def eventarc_receiver():
     return jsonify({"status": "Success", "file": file_name}), 200
 
 
-@app.route("/search", methods=["POST"])
+@app.route("/search", methods=["GET", "POST"])
 def search():
     """
     RAG search endpoint. Accepts a natural language query, embeds it via Vertex AI,
     and returns the most semantically similar transcript chunks from pgvector.
+    Supports both GET (query params) and POST (JSON body).
     """
     import psycopg2
 
-    body = request.get_json()
-    if not body or "query" not in body:
-        return jsonify({"error": "Missing 'query' field in JSON body"}), 400
+    if request.method == "GET":
+        query_text = request.args.get("query")
+        limit = int(request.args.get("limit", 5))
+        theme_filter = request.args.get("theme", None)
+        speaker_filter = request.args.get("speaker", None)
+        transcript_filter = request.args.get("transcript", None)
+    else:
+        body = request.get_json()
+        if not body:
+            return jsonify({"error": "Missing JSON body"}), 400
+        query_text = body.get("query")
+        limit = body.get("limit", 5)
+        theme_filter = body.get("theme", None)
+        speaker_filter = body.get("speaker", None)
+        transcript_filter = body.get("transcript", None)
 
-    query_text = body["query"]
-    limit = body.get("limit", 5)
-    theme_filter = body.get("theme", None)
-    speaker_filter = body.get("speaker", None)
-    transcript_filter = body.get("transcript", None)
+    if not query_text:
+        return jsonify({"error": "Missing 'query' parameter"}), 400
 
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "tonal-transit-435411-i4")
 
