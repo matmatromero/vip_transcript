@@ -16,3 +16,8 @@ __pycache__/
 output/chunks/*.json
 docker-compose.yml
 !raw_transcripts/
+
+GCP_CONSOLE_DEPLOYMENT_GUIDE.md
+GCP_ARCHITECTURE.md
+
+old_references/*
