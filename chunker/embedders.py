@@ -113,9 +113,16 @@ class VertexAIEmbedder:
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         # Vertex AI SDK requires the text strings, and returns `TextEmbedding` objects which hold a `values` float list.
-        # It handles batching natively up to 250 requests
-        embeddings = self._client.get_embeddings(texts)
-        return [emb.values for emb in embeddings]
+        # It has a strict limit of 250 instances per API call, so we must batch our arrays.
+        all_embeddings = []
+        batch_size = 250
+        
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            embeddings = self._client.get_embeddings(batch)
+            all_embeddings.extend([emb.values for emb in embeddings])
+            
+        return all_embeddings
 
     def __str__(self) -> str:
         return f"VertexAIEmbedder/{self._model}"
